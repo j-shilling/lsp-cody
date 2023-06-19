@@ -1,0 +1,49 @@
+name: Verify Emacs Client
+on:
+  push:
+    paths:
+      - "**.el"
+
+jobs:
+  verify:
+    defaults:
+      run:
+        working-directory: client/emacs/lsp-cody
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        emacs-version: [26.3, 27.2, 28.2, snapshot]
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: pnpm/action-setup@v2
+        id: pnpm-install
+        with:
+          version: 8.3.0
+          run_install: false
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+      - uses: actions/cache@v3
+        name: Setup pnpm cache
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+      - name: Install npm dependencies
+        run: pnpm install --frozen-lockfile
+      - uses: jcs090218/setup-emacs@master
+        with:
+          version: ${{ matrix.emacs-version }}
+      - name: Install Emacs dependencies
+        run: pnpm run install-deps
+      - name: Build
+        run: pnpm run build
+      - name: Lint
+        run: pnpm run lint
+      - name: Test
+        run: pnpm run test
