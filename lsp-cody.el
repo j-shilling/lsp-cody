@@ -71,8 +71,7 @@
                                             (lsp-package-ensure 'cody-lsp-gateway
                                                                 callback error-callback))))))
 
-(when (featurep 'lsp-mode)
-  (lsp-cody-lsp-mode-initialize))
+(lsp-cody-lsp-mode-initialize)
 
 (provide 'lsp-cody)
 ;;; lsp-cody.el ends here
