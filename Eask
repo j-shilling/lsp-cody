@@ -19,3 +19,8 @@
  "lsp-cody-lsp-mode.el")
 
 (depends-on "emacs" "26.1")
+
+(development
+  (depends-on "edit-indirect")
+  (depends-on "yasnippet")
+  (depends-on "lsp-mode"))
