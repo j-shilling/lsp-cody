@@ -1,8 +1,7 @@
 name: Verify Emacs Client
 on:
   push:
-    paths:
-      - "**.el"
+  workflow_dispatch:
 
 jobs:
   verify:
