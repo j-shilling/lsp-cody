@@ -17,31 +17,31 @@
 (require 'lsp-mode nil t)
 
 (defgroup lsp-cody nil
-  "Client for the LSP Cody Gateway"
+  "Client for the LSP Cody Gateway."
   :group 'tools
   :link '(url-link "https://sourcegraph.com/")
   :package-version '(lsp-cody . "0.0.1"))
 
 (defcustom lsp-cody-disable-lsp-mode-p nil
-  "When non-nil, do not integrate with lsp-mode."
+  "When non-nil, do not integrate with `lsp-mode'."
   :type 'boolean
   :group 'lsp-cody
   :package-version '(lsp-cody . "0.0.1"))
 
 (defcustom lsp-cody-major-modes '(typescript-mode)
-  "A list of major modes to use lsp-cody with"
+  "A list of major modes to use `lsp-cody' with."
   :type '(repeat string)
   :group 'lsp-cody
   :package-version '(lsp-cody . "0.0.1"))
 
 (defcustom lsp-cody-server-command '("cody-lsp-gateway" "--stdio")
-  "command to start cody-lsp-gateway."
+  "Command to start cody-lsp-gateway."
   :type '(repeat string)
   :group 'lsp-cody
   :package-version '(lsp-cody . "0.0.1"))
 
 (defun lsp-cody--use-lsp-mode-p ()
-  "Return `t' if `lsp-mode' is available and has not been disabled.
+  "Return t if `lsp-mode' is available and has not been disabled.
 
 `lsp-cody' will integrate with `lsp-mode' if available, unless
 `lsp-cody-disable-lsp-mode-p' is non-nil."
