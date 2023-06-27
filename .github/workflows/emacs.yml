@@ -1,14 +1,10 @@
 name: Verify Emacs Client
 on:
   push:
-    paths:
-      - "**.el"
+  workflow_dispatch:
 
 jobs:
   verify:
-    defaults:
-      run:
-        working-directory: client/emacs/lsp-cody
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:

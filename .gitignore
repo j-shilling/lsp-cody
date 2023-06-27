@@ -15,3 +15,5 @@ dist/
 # packaging
 *-autoloads.el
 *-pkg.el
+
+node_modules
