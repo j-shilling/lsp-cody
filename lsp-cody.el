@@ -15,6 +15,9 @@
 ;;; Code:
 
 (require 'lsp-mode nil t)
+(require 'eglot nil t)
+
+(require 'map)
 
 (defgroup lsp-cody nil
   "Client for the LSP Cody Gateway."
@@ -24,6 +27,12 @@
 
 (defcustom lsp-cody-disable-lsp-mode-p nil
   "When non-nil, do not integrate with `lsp-mode'."
+  :type 'boolean
+  :group 'lsp-cody
+  :package-version '(lsp-cody . "0.0.1"))
+
+(defcustom lsp-cody-disable-eglot-p nil
+  "When non-nil, do not integrate with `eglot'."
   :type 'boolean
   :group 'lsp-cody
   :package-version '(lsp-cody . "0.0.1"))
@@ -47,6 +56,14 @@
 `lsp-cody-disable-lsp-mode-p' is non-nil."
   (and (not lsp-cody-disable-lsp-mode-p)
        (featurep 'lsp-mode)))
+
+(defun lsp-cody--use-eglot-p ()
+  "Return t if `eglot' is available and has not been disabled.
+
+`lsp-cody' will integrate with `eglot' if available, unless
+`lsp-cody-disable-eglot-p' is non-nil."
+  (and (not lsp-cody-disable-eglot-p)
+       (featurep 'eglot)))
 
 ;;;###autoload
 (defun lsp-cody-lsp-mode-initialize ()
@@ -74,7 +91,25 @@
                         (lsp-package-ensure 'cody-lsp-gateway
                                             callback error-callback))))))
 
+;;;###autoload
+(defun lsp-cody-eglot-initialize ()
+  "Register cody-lsp-gateway with `eglot'."
+  ;; TODO: This function needs to be improved: 1) It can't handle adding cody to
+  ;; a mode that already has 'eglot-alternatives as its car; 2) It will
+  ;; duplicate the cody entry every time it's run
+  (when (lsp-cody--use-eglot-p)
+    (dolist (mode lsp-cody-major-modes)
+      (let ((original-value (map-elt eglot-server-programs mode)))
+        (if original-value
+            (add-to-list 'eglot-server-programs
+                         `(,mode . (eglot-alternatives
+                                    '(,original-value
+                                      ,lsp-cody-server-command))))
+          (add-to-list 'eglot-server-programs
+                       `(,mode . ,lsp-cody-server-command)))))))
+
 (lsp-cody-lsp-mode-initialize)
+(lsp-cody-eglot-initialize)
 
 (provide 'lsp-cody)
 ;;; lsp-cody.el ends here
