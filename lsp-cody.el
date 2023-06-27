@@ -57,19 +57,22 @@
                     '(:npm :package "@j-shilling/cody-lsp-gateway"
                       :path "cody-lsp-gateway"))
     (lsp-register-client
-     (make-lsp-client :new-connection (lsp-stdio-connection
-                                       (lambda ()
-                                         `(,(or (executable-find (cl-first lsp-cody-server-command))
-                                                (lsp-package-path 'cody-lsp-gateway))
-                                           ,@(cl-rest lsp-cody-server-command))))
+     (make-lsp-client :new-connection
+                      (lsp-stdio-connection
+                       (lambda ()
+                         `(,(or (executable-find
+                                 (cl-first lsp-cody-server-command))
+                                (lsp-package-path 'cody-lsp-gateway))
+                           ,@(cl-rest lsp-cody-server-command))))
                       :add-on? t
                       :major-modes lsp-cody-major-modes
                       :priority 0
                       :server-id 'cody
                       :multi-root t
-                      :download-server-fn (lambda (_client callback error-callback _update?)
-                                            (lsp-package-ensure 'cody-lsp-gateway
-                                                                callback error-callback))))))
+                      :download-server-fn
+                      (lambda (_client callback error-callback _update?)
+                        (lsp-package-ensure 'cody-lsp-gateway
+                                            callback error-callback))))))
 
 (lsp-cody-lsp-mode-initialize)
 
