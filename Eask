@@ -18,7 +18,8 @@
  "lsp-cody.el"
  "lsp-cody-lsp-mode.el")
 
-(depends-on "emacs" "26.1")
+(depends-on "emacs" "27.1")
+(depends-on "dash")
 
 (development
   (depends-on "lsp-mode")
