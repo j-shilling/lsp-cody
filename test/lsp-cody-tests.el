@@ -8,107 +8,81 @@
 
 ;;; Code:
 
-(eval-when-compile (require 'cl))
-(require 'dash)
+(eval-when-compile (require 'cl-lib))
+(require 'subr-x)
+
 (require 'buttercup)
 (require 'eglot)
 
 (require 'lsp-cody)
 
-(defun lsp-cody-tests--expand-eglot-server-program-major-mode (mode-identifier)
-  (cond
-   ((symbolp mode-identifier)
-    (list mode-identifier))
-   ((eq (cadr mode-identifier) :language-id)
-    (list (car mode-identifier)))
-   ((listp mode-identifier)
-    (-map #'lsp-cody-tests--expand-eglot-server-program-major-mode mode-identifier))
-   (t (list))))
+(defmacro lsp-cody-tests--get-completing-read-collection (&rest body)
+  "Get the collection passed to `completing-read'.
 
-(defun lsp-cody-tests--eglot-server-programs-major-modes (&optional server-programs)
-  (->> (or server-programs eglot-server-programs)
-       (-map #'car)
-       (-map #'lsp-cody-tests--expand-eglot-server-program-major-mode)
-       (-flatten)))
+`BODY' should be one or more forms which, when evaluated, call
+`completing-read' one time. While evaluating `BODY', the call to
+`copleting-read' is captured, and the collection passed to it
+becomes the value of this expression as a whole."
+  (let ((advice-name (gensym))
+        (result-name (gensym)))
+    `(let ((,result-name))
+       (cl-flet ((,advice-name (_prompt collection &rest)
+                   (setf ,result-name collection)
+                   (car collection)))
+         (advice-add 'completing-read :override #',advice-name)
+         ,@body
+         (advice-remove'completing-read #',advice-name))
+       ,result-name)))
 
-(defun lsp-cody-tests--eglot-server-programs-value (mode &optional server-programs)
-  (let* ((eglot-server-programs (or server-programs eglot-server-programs))
-         (result (cdr (eglot--lookup-mode mode))))
-    (if (functionp result)
-        (funcall result)
-      result)))
+(describe "Eglot"
+  (describe "(lsp-cody--should-add-cody-p entry &optional major-modes)"
+    (it "returns match when (car `entry') is a symbol"
+      (expect (lsp-cody--should-add-cody-p '(vimrc-mode . ("vim-language-server" "--stdio"))
+                                           '(vimrc-mode))
+              :to-be 'vimrc-mode))
+    (it "returns match when (car `entry') is a list containing :language-id"
+      (expect (lsp-cody--should-add-cody-p '((tuareg-mode :language-id "ocaml") . ("ocamllsp"))
+                                           '(tuareg-mode))
+              :to-be 'tuareg-mode))
+    (it "returns match when (car `entry') is a mix of both types"
+      (expect (lsp-cody--should-add-cody-p '(((caml-mode :language-id "ocaml")
+                                              (tuareg-mode :language-id "ocaml") reason-mode)
+                                             . ("ocamllsp"))
+                                           '(caml-mode))
+              :to-be 'caml-mode))
+    (it "returns nil otherwise"
+      (expect (lsp-cody--should-add-cody-p '(((caml-mode :language-id "ocaml")
+                                              (tuareg-mode :language-id "ocaml") reason-mode)
+                                             . ("ocamllsp"))
+                                           '(typescript-mode))
+              :to-be nil)))
 
-(buttercup-define-matcher :to-match-server-list (actual-fn expected-fn)
-  (let* ((expected (funcall expected-fn))
-         (actual (funcall actual-fn))
-         (expected-modes (lsp-cody-tests--eglot-server-programs-major-modes expected))
-         (actual-modes (lsp-cody-tests--eglot-server-programs-major-modes actual))
-         (missing-modes (--remove (member it actual-modes) expected-modes))
-         (extra-modes (--remove (member it expected-modes) actual-modes))
-         (changed-modes (--filter (cl-equalp
-                                   (lsp-cody-tests--eglot-server-programs-value it actual)
-                                   (lsp-cody-tests--eglot-server-programs-value it expected))
-                                  (--filter (member it actual-modes) expected-modes))))
-    (cons
-     (and (= 0 (length missing-modes))
-          (= 0 (length extra-modes))
-          (= 0 (length changed-modes)))
-     (cl-concatenate
-      'string
-      (when (> (length missing-modes) 0)
-        (format " Expected modes missing: %s" (princ missing-modes)))
-      (when (> (length extra-modes) 0)
-        (format " Extra modes present: %s" (princ extra-modes)))
-      (when (> (length changed-modes) 0)
-        (format " Values do not match for modes: %s" (princ changed-modes)))))))
 
-(describe "Eglot Integration"
-  (let ((test-server-programs
-         '((vimrc-mode . ("vim-language-server" "--stdio"))
-           ((cmake-mode cmake-ts-mode) . ("cmake-language-server"))
-           (((caml-mode :language-id "ocaml")
-             (tuareg-mode :language-id "ocaml") reason-mode)
-            . ("ocamllsp")))))
 
-    (it "when no entry exists for mode, it should add one"
-      (let ((result (lsp-cody--add-to-eglot-server-programs 'foobar-mode test-server-programs)))
-        (expect result :to-match-server-list
-                `((foobar-mode . ,lsp-cody-server-command)
-                  (vimrc-mode . ("vim-language-server" "--stdio"))
-                  ((cmake-mode cmake-ts-mode) . ("cmake-language-server"))
-                  (((caml-mode :language-id "ocaml")
-                    (tuareg-mode :language-id "ocaml") reason-mode)
-                   . ("ocamllsp"))))))
-
-    (it "when mode is matched against a symbol, it should add cody as a new option"
-      (let ((result (lsp-cody--add-to-eglot-server-programs 'vimrc-mode test-server-programs)))
-        (expect result :to-match-server-list
-                `((vimrc-mode . ,(eglot-alternatives
-                                  `(("vim-language-server" "--stdio")
-                                    ,lsp-cody-server-command)))
-                  ((cmake-mode cmake-ts-mode) . ("cmake-language-server"))
-                  (((caml-mode :language-id "ocaml")
-                    (tuareg-mode :language-id "ocaml") reason-mode)
-                   . ("ocamllsp"))))))
-
-    (it "when mode is matched against a list of symbols, it should add cody as a new option"
-      (let ((result (lsp-cody--add-to-eglot-server-programs 'cmake-mode test-server-programs)))
-        (expect result :to-match-server-list
-                `((vimrc-mode . ("vim-language-server" "--stdio"))
-                  ((cmake-mode cmake-ts-mode) . ,(eglot-alternatives
-                                                  `("cmake-language-server"
-                                                    ,lsp-cody-server-command)))
-                  (((caml-mode :language-id "ocaml")
-                    (tuareg-mode :language-id "ocaml") reason-mode)
-                   . ("ocamllsp"))))))
-
-    (it "when mode is matched against a list with mixed formats, it should add cody as a new option"
-      (let ((result (lsp-cody--add-to-eglot-server-programs 'tuareg-mode test-server-programs)))
-        (expect result :to-match-server-list
-                `((vimrc-mode . ("vim-language-server" "--stdio"))
-                  ((cmake-mode cmake-ts-mode) . ("cmake-language-server"))
-                  (((caml-mode :language-id "ocaml")
-                    (tuareg-mode :language-id "ocaml") reason-mode)
-                   . ,(eglot-alternatives
-                       `("ocamllsp"
-                         ,lsp-cody-server-command)))))))))
+  (describe "(lsp-cody--add-cody entry)"
+    (it "adds cody when (cdr `entry') is a single list of strings"
+      (let* ((entry '(vimrc-mode . ("vim-language-server" "--stdio")))
+             (expected-alternatives (lsp-cody-tests--get-completing-read-collection
+                                     (funcall (eglot-alternatives
+                                               (list lsp-cody-server-command
+                                                     (cdr entry))))))
+             (result (lsp-cody--add-cody entry)))
+        (expect (car result) :to-equal (car entry))
+        (expect (functionp (cdr result)) :to-be-truthy)
+        (expect (lsp-cody-tests--get-completing-read-collection
+                 (funcall (cdr result)))
+                :to-have-same-items-as expected-alternatives)))
+    (it "adds cody when (cdr `entry') is a function"
+      (let* ((entry `((c-mode c-ts-mode c++-mode c++-ts-mode)
+                      . ,(eglot-alternatives
+                          '("clangd" "ccls"))))
+             (expected-alternatives (lsp-cody-tests--get-completing-read-collection
+                                     (funcall (eglot-alternatives
+                                               (list lsp-cody-server-command
+                                                     (cdr entry))))))
+             (result (lsp-cody--add-cody entry)))
+        (expect (car result) :to-equal (car entry))
+        (expect (functionp (cdr result)) :to-be-truthy)
+        (expect (lsp-cody-tests--get-completing-read-collection
+                 (funcall (cdr result)))
+                :to-have-same-items-as expected-alternatives)))))

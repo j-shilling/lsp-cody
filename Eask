@@ -15,11 +15,11 @@
 (source 'melpa)
 
 (files
- "lsp-cody.el"
- "lsp-cody-lsp-mode.el")
+ "lsp-cody.el")
 
 (depends-on "emacs" "27.1")
-(depends-on "dash")
+(depends-on "dash" "2.19.1")
+(depends-on "s" "1.13.0")
 
 (development
   (depends-on "lsp-mode")

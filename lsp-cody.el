@@ -3,7 +3,7 @@
 ;; URL: https://sourcegraph.com/
 ;; Version: 0.0.1
 ;; Keywords: languages
-;; Package-Requires: ((emacs "26.1"))
+;; Package-Requires: ((emacs "27.1") (dash "2.19.1") (s "1.13.0"))
 
 ;; This file is not part of GNU Emacs.
 
@@ -18,6 +18,8 @@
 (require 'eglot nil t)
 
 (require 'map)
+
+(require 'dash)
 
 (defgroup lsp-cody nil
   "Client for the LSP Cody Gateway."
@@ -90,6 +92,47 @@
                       (lambda (_client callback error-callback _update?)
                         (lsp-package-ensure 'cody-lsp-gateway
                                             callback error-callback))))))
+
+(defun lsp-cody--add-to-eglot-server-programs (mode &optional server-programs)
+  (cons `(,mode . ,lsp-cody-server-command)
+        (or server-programs eglot-server-programs)))
+
+(defun lsp-cody--should-add-cody-p (entry &optional major-modes)
+  "Return t if `ENTRY' identifies a mode should use cody.
+
+`ENTRY' should be the format of an entry in
+`EGLOT-SERVER-PROGRAMS', but only the `CAR' is looked at.
+
+This function returns through if one of the `MAJOR-MODES' would
+match this entry. If `MAJOR-MODES' is not provided, it defaults
+to `LSP-CODY-MAJOR-MODES'."
+  (let ((mode (car entry))
+        (modes (or major-modes lsp-cody-major-modes)))
+    (cond
+     ((symbolp mode)
+      (car (member mode modes)))
+     ((and (listp mode) (eq (cadr mode) :language-id))
+      (car (member (car mode) modes)))
+     ((listp mode)
+      (-some (lambda (id)
+               (lsp-cody--should-add-cody-p `(,id . nil) major-modes))
+             mode))
+     (t nil))))
+
+(defun lsp-cody--add-cody (entry)
+  "Add cody as to `ENTRY'.
+
+Entry is a cons cell from `EGLOT-SERVER-PROGRAMS' whose cdr
+identifies one or more servers that can be used with the modes
+identified by its car. This function returns a new cons cell with
+the same car and a cdr that adds cody as a valid server."
+  (cl-destructuring-bind (mode . contact)
+      entry
+    (cl-typecase contact
+      (function (error "Not implemented"))
+      (t `(,mode . ,(eglot-alternatives
+                     (cons lsp-cody-server-command
+                           (list contact))))))))
 
 ;;;###autoload
 (defun lsp-cody-eglot-initialize ()
