@@ -1,3 +1,5 @@
+(setq sentence-end-double-space nil)
+
 (package "lsp-cody"
          "0.0.1"
          "A Client to Connect to the Cody LSP Gateway")

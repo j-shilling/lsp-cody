@@ -18,8 +18,10 @@
 (require 'eglot nil t)
 
 (require 'map)
+(require 'disass)
 
 (require 'dash)
+(require 's)
 
 (defgroup lsp-cody nil
   "Client for the LSP Cody Gateway."
@@ -67,35 +69,43 @@
   (and (not lsp-cody-disable-eglot-p)
        (featurep 'eglot)))
 
-;;;###autoload
-(defun lsp-cody-lsp-mode-initialize ()
-  "Register cody-lsp-gateway with `lsp-mode'."
-  (when (lsp-cody--use-lsp-mode-p)
-    (lsp-dependency 'cody-lsp-gateway
-                    '(:system "cody-lsp-gateway")
-                    '(:npm :package "@j-shilling/cody-lsp-gateway"
-                      :path "cody-lsp-gateway"))
-    (lsp-register-client
-     (make-lsp-client :new-connection
-                      (lsp-stdio-connection
-                       (lambda ()
-                         `(,(or (executable-find
-                                 (cl-first lsp-cody-server-command))
-                                (lsp-package-path 'cody-lsp-gateway))
-                           ,@(cl-rest lsp-cody-server-command))))
-                      :add-on? t
-                      :major-modes lsp-cody-major-modes
-                      :priority 0
-                      :server-id 'cody
-                      :multi-root t
-                      :download-server-fn
-                      (lambda (_client callback error-callback _update?)
-                        (lsp-package-ensure 'cody-lsp-gateway
-                                            callback error-callback))))))
+(defun lsp-cody--constants-of-compiled-function (f)
+  "Return any constants held in the bytecode of `F'.
 
-(defun lsp-cody--add-to-eglot-server-programs (mode &optional server-programs)
-  (cons `(,mode . ,lsp-cody-server-command)
-        (or server-programs eglot-server-programs)))
+This function is indented to be a way to read from the lexical
+environment contained within a closure, but its implementation is
+likely unstable. Currently, it works by examining the string
+produced when disassembling `F' and parses any line containing
+the word \"constant\"."
+  (cl-check-type f compiled-function)
+  (->> (with-temp-buffer
+         (disassemble f (current-buffer))
+         (buffer-string))
+       (s-match-strings-all "constant\s+\\(.*\\)$")
+       (--map (car (read-from-string (cadr it))))))
+
+(defun lsp-cody--closurep (obj)
+  "Return t if `OBJ' is a closure."
+  (and (consp obj) (eq 'closure (car obj))))
+(cl-deftype lsp-cody--closure ()
+  '(satisfies lsp-cody--closurep))
+(defun lsp-cody--constants-of-closure (f)
+  "Return any constants held in the closure `F'.
+
+This function examins the s-expression representing a closure and
+reads the values held within its lexical context."
+  (cl-check-type f lsp-cody--closure)
+  (->> (cdr f)
+       car
+       (-map #'cdr)))
+
+(defun lsp-cody--constants-of-function (f)
+  "Return any constants held in `F'.
+
+`F' should be either a compiled function or a closure."
+  (cl-typecase f
+    (compiled-function (lsp-cody--constants-of-compiled-function f))
+    (lsp-cody--closure (lsp-cody--constants-of-closure f))))
 
 (defun lsp-cody--should-add-cody-p (entry &optional major-modes)
   "Return t if `ENTRY' identifies a mode should use cody.
@@ -129,7 +139,10 @@ the same car and a cdr that adds cody as a valid server."
   (cl-destructuring-bind (mode . contact)
       entry
     (cl-typecase contact
-      (function (error "Not implemented"))
+      (function (let ((constants (lsp-cody--constants-of-function contact)))
+                  `(,mode . ,(eglot-alternatives
+                              (cons lsp-cody-server-command
+                                    (car constants))))))
       (t `(,mode . ,(eglot-alternatives
                      (cons lsp-cody-server-command
                            (list contact))))))))
@@ -137,19 +150,39 @@ the same car and a cdr that adds cody as a valid server."
 ;;;###autoload
 (defun lsp-cody-eglot-initialize ()
   "Register cody-lsp-gateway with `eglot'."
-  ;; TODO: This function needs to be improved: 1) It can't handle adding cody to
-  ;; a mode that already has 'eglot-alternatives as its car; 2) It will
-  ;; duplicate the cody entry every time it's run
   (when (lsp-cody--use-eglot-p)
-    (dolist (mode lsp-cody-major-modes)
-      (let ((original-value (map-elt eglot-server-programs mode)))
-        (if original-value
-            (add-to-list 'eglot-server-programs
-                         `(,mode . (eglot-alternatives
-                                    '(,original-value
-                                      ,lsp-cody-server-command))))
-          (add-to-list 'eglot-server-programs
-                       `(,mode . ,lsp-cody-server-command)))))))
+    (setq eglot-server-programs
+          (-reduce-from (lambda (acc entry)
+                          (if (lsp-cody--should-add-cody-p entry)
+                              (cons (lsp-cody--add-cody entry) acc)
+                            acc))
+                        (list) eglot-server-programs))))
+
+;;;###autoload
+(defun lsp-cody-lsp-mode-initialize ()
+  "Register cody-lsp-gateway with `lsp-mode'."
+  (when (lsp-cody--use-lsp-mode-p)
+    (lsp-dependency 'cody-lsp-gateway
+                    '(:system "cody-lsp-gateway")
+                    '(:npm :package "@j-shilling/cody-lsp-gateway"
+                      :path "cody-lsp-gateway"))
+    (lsp-register-client
+     (make-lsp-client :new-connection
+                      (lsp-stdio-connection
+                       (lambda ()
+                         `(,(or (executable-find
+                                 (cl-first lsp-cody-server-command))
+                                (lsp-package-path 'cody-lsp-gateway))
+                           ,@(cl-rest lsp-cody-server-command))))
+                      :add-on? t
+                      :major-modes lsp-cody-major-modes
+                      :priority 0
+                      :server-id 'cody
+                      :multi-root t
+                      :download-server-fn
+                      (lambda (_client callback error-callback _update?)
+                        (lsp-package-ensure 'cody-lsp-gateway
+                                            callback error-callback))))))
 
 (lsp-cody-lsp-mode-initialize)
 (lsp-cody-eglot-initialize)
