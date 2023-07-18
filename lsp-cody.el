@@ -77,7 +77,8 @@ environment contained within a closure, but its implementation is
 likely unstable. Currently, it works by examining the string
 produced when disassembling `F' and parses any line containing
 the word \"constant\"."
-  (cl-check-type f compiled-function)
+  (unless (compiled-function-p f)
+    (signal 'wrong-type-argument (list 'compiled-function-p f)))
   (->> (with-temp-buffer
          (disassemble f (current-buffer))
          (buffer-string))
@@ -87,14 +88,13 @@ the word \"constant\"."
 (defun lsp-cody--closurep (obj)
   "Return t if `OBJ' is a closure."
   (and (consp obj) (eq 'closure (car obj))))
-(cl-deftype lsp-cody--closure ()
-  '(satisfies lsp-cody--closurep))
 (defun lsp-cody--constants-of-closure (f)
   "Return any constants held in the closure `F'.
 
 This function examins the s-expression representing a closure and
 reads the values held within its lexical context."
-  (cl-check-type f lsp-cody--closure)
+  (unless (lsp-cody--closurep f)
+    (signal 'wrong-type-argument (list 'lsp-cody--closurep f)))
   (->> (cdr f)
        car
        (-map #'cdr)))
@@ -103,9 +103,11 @@ reads the values held within its lexical context."
   "Return any constants held in `F'.
 
 `F' should be either a compiled function or a closure."
-  (cl-typecase f
-    (compiled-function (lsp-cody--constants-of-compiled-function f))
-    (lsp-cody--closure (lsp-cody--constants-of-closure f))))
+  (cond
+    ((compiled-function-p f)
+     (lsp-cody--constants-of-compiled-function f))
+    ((lsp-cody--closurep f)
+     (lsp-cody--constants-of-closure f))))
 
 (defun lsp-cody--should-add-cody-p (entry &optional major-modes)
   "Return t if `ENTRY' identifies a mode should use cody.
