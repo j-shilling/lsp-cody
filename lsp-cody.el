@@ -107,10 +107,10 @@ reads the values held within its lexical context."
 
 `F' should be either a compiled function or a closure."
   (cond
-    ((compiled-function-p f)
-     (lsp-cody--constants-of-compiled-function f))
-    ((lsp-cody--closurep f)
-     (lsp-cody--constants-of-closure f))))
+   ((compiled-function-p f)
+    (lsp-cody--constants-of-compiled-function f))
+   ((lsp-cody--closurep f)
+    (lsp-cody--constants-of-closure f))))
 
 (defun lsp-cody--should-add-cody-p (entry &optional major-modes)
   "Return t if `ENTRY' identifies a mode should use cody.
@@ -170,7 +170,7 @@ the same car and a cdr that adds cody as a valid server."
     (lsp-dependency 'cody-lsp-gateway
                     '(:system "cody-lsp-gateway")
                     '(:npm :package "@j-shilling/cody-lsp-gateway"
-                      :path "cody-lsp-gateway"))
+                           :path "cody-lsp-gateway"))
     (lsp-register-client
      (make-lsp-client :new-connection
                       (lsp-stdio-connection
