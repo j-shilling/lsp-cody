@@ -141,8 +141,8 @@ Entry is a cons cell from `EGLOT-SERVER-PROGRAMS' whose cdr
 identifies one or more servers that can be used with the modes
 identified by its car. This function returns a new cons cell with
 the same car and a cdr that adds cody as a valid server."
-  (when (fboundp 'eglot-alternatives) ;; This check stops package-lint from
-                                      ;; expecting emacs-29.1
+  ;; This check stops package-lint from expecting emacs-29.1
+  (when (fboundp 'eglot-alternatives)
     (cl-destructuring-bind (mode . contact)
         entry
       (cl-typecase contact

@@ -6,5 +6,5 @@
                     projectile-test-cmd-map)))
          (sentence-end-double-space . nil)))
  (git-commit-mode . ((git-commit-major-mode . git-commit-elisp-text-mode)))
- (emacs-lisp-mode . ((fill-column . 80)
+ (emacs-lisp-mode . ((fill-column . 100)
                      (indent-tabs-mode . nil))))
