@@ -15,12 +15,18 @@
 (source 'melpa)
 
 (files
- "lsp-cody.el"
- "lsp-cody-lsp-mode.el")
+ "lsp-cody.el")
 
-(depends-on "emacs" "26.1")
+(depends-on "emacs" "27.1")
+(depends-on "dash" "2.19.1")
+(depends-on "s" "1.13.0")
 
 (development
-  (depends-on "edit-indirect")
-  (depends-on "yasnippet")
-  (depends-on "lsp-mode"))
+  (depends-on "lsp-mode")
+  (depends-on "eglot"))
+
+(setq sentence-end-double-space nil)
+(setq fill-column 100)
+(setq elisp-lint-ignored-validators
+      '("indent-character"
+        "fill-column"))
