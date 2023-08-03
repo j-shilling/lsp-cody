@@ -77,8 +77,11 @@ environment contained within a closure, but its implementation is
 likely unstable. Currently, it works by examining the string
 produced when disassembling `F' and parses any line containing
 the word \"constant\"."
-  (unless (compiled-function-p f)
-    (signal 'wrong-type-argument (list 'compiled-function-p f)))
+  (when (subrp f)
+    (user-error "Cannot extract lexical environment from a built-in or naively\
+ compiled function"))
+  (unless (byte-code-function-p f)
+    (signal 'wrong-type-argument (list 'byte-code-function-p f)))
   (->> (with-temp-buffer
          (disassemble f (current-buffer))
          (buffer-string))
