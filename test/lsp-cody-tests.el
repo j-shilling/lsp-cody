@@ -34,6 +34,27 @@ becomes the value of this expression as a whole."
          (advice-remove'completing-read #',advice-name))
        ,result-name)))
 
+(defmacro lsp-cody-tests--mock-executable-find (&rest body)
+  "Mock `executable-find' to always return non-nil.
+
+If these tests run in a container that does not have a sample
+language server installed. The test will fail because an error
+will be signaled by `eglot-alternatives'. Counteract this by
+evaluating `BODY' in a context where `executable-find' is
+replaced with a dummy version."
+  (let ((advice-name (gensym))
+        (result-name (gensym)))
+    `(let ((,result-name))
+       (cl-flet ((,advice-name (command &rest)
+                   ;; Echo back `COMMAND'
+                   command))
+         (advice-add 'executable-find :override #',advice-name)
+         (setf ,result-name
+               (progn
+                 ,@body))
+         (advice-remove 'executable-find #',advice-name)
+         ,result-name))))
+
 (describe "Eglot"
   (describe "(lsp-cody--should-add-cody-p entry &optional major-modes)"
     (it "returns match when (car `entry') is a symbol"
@@ -63,26 +84,30 @@ becomes the value of this expression as a whole."
     (it "adds cody when (cdr `entry') is a single list of strings"
       (let* ((entry '(vimrc-mode . ("vim-language-server" "--stdio")))
              (expected-alternatives (lsp-cody-tests--get-completing-read-collection
-                                     (funcall (eglot-alternatives
-                                               (list lsp-cody-server-command
-                                                     (cdr entry))))))
+                                     (lsp-cody-tests--mock-executable-find
+                                      (funcall (eglot-alternatives
+                                                (list lsp-cody-server-command
+                                                      (cdr entry)))))))
              (result (lsp-cody--add-cody entry)))
         (expect (car result) :to-equal (car entry))
         (expect (functionp (cdr result)) :to-be-truthy)
         (expect (lsp-cody-tests--get-completing-read-collection
-                 (funcall (cdr result)))
+                 (lsp-cody-tests--mock-executable-find
+                  (funcall (cdr result))))
                 :to-have-same-items-as expected-alternatives)))
     (it "adds cody when (cdr `entry') is a function"
       (let* ((entry `((c-mode c-ts-mode c++-mode c++-ts-mode)
-                      . ,(eglot-alternatives
-                          '("clangd" "ccls"))))
+                      . (eglot-alternatives
+                         '("clangd" "ccls"))))
              (expected-alternatives (lsp-cody-tests--get-completing-read-collection
-                                     (funcall (eglot-alternatives
-                                               (list lsp-cody-server-command
-                                                     (cdr entry))))))
+                                     (lsp-cody-tests--mock-executable-find
+                                      (funcall (eglot-alternatives
+                                                (list lsp-cody-server-command
+                                                      (cdr entry)))))))
              (result (lsp-cody--add-cody entry)))
         (expect (car result) :to-equal (car entry))
         (expect (functionp (cdr result)) :to-be-truthy)
         (expect (lsp-cody-tests--get-completing-read-collection
-                 (funcall (cdr result)))
+                 (lsp-cody-tests--mock-executable-find
+                  (funcall (cdr result))))
                 :to-have-same-items-as expected-alternatives)))))
